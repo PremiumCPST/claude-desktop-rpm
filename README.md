@@ -13,7 +13,7 @@ chacun le reconstruit sur sa machine à partir du `.deb` téléchargé chez Anth
 
 ```bash
 # Fedora 41+ (dnf5)
-sudo dnf config-manager addrepo --from-repofile=https://premiumcpst.github.io/claude-desktop-rpm/claude-desktop.repo
+sudo dnf config-manager addrepo --from-repofile=https://raw.githubusercontent.com/PremiumCPST/claude-desktop-rpm/repo/claude-desktop.repo
 # RHEL / Alma / Rocky 9+ (dnf4) : sudo dnf config-manager --add-repo <même URL>
 
 sudo dnf install claude-desktop-builder
@@ -93,11 +93,10 @@ publiée sur support.claude.com), signature GPG de `InRelease`, SHA256 de l'inde
 
 ## Publication du dépôt
 
-À chaque push sur `main`, GitHub Actions (`.github/workflows/publish.yml`)
-construit le paquet `claude-desktop-builder` dans un conteneur Fedora, génère
-les métadonnées `createrepo_c` et publie le tout sur GitHub Pages. Pour une
-nouvelle version des scripts, augmenter `Version` (ou `Release`) dans
-`builder/claude-desktop-builder.spec` avant de pousser.
+Le dépôt dnf vit sur la branche `repo` et est servi par raw.githubusercontent.com,
+sans CI. Pour publier une nouvelle version des scripts : augmenter `Version`
+(ou `Release`) dans `builder/claude-desktop-builder.spec`, committer sur `main`,
+puis lancer `bash builder/publish-repo.sh` (nécessite `rpm-build` et `createrepo_c`).
 
 ## Fichiers
 
@@ -106,7 +105,7 @@ nouvelle version des scripts, augmenter `Version` (ou `Release`) dans
 - `claude-desktop.spec` : spec RPM, paramétrée par le script.
 - `builder/` : paquet `claude-desktop-builder` (spec, `claude-desktop-update`, service et
   timer systemd, utilisateur sysusers) et `make-srpm.sh`.
-- `.github/workflows/publish.yml` : construction et publication du dépôt dnf.
+- `builder/publish-repo.sh` : construit le paquet et publie le dépôt dnf sur la branche `repo`.
 - `LICENSE` : MIT, pour les scripts uniquement.
 - `tests/make-fixture-deb.sh` : fabrique un faux `.deb` à la structure officielle.
 - `tests/test-apt-chain.sh` : rejoue la chaîne de téléchargement contre un faux

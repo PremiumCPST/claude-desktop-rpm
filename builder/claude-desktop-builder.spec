@@ -5,6 +5,9 @@
 # service: Anthropic's official .deb is downloaded, verified and rebuilt as
 # an RPM on the user's own machine, then installed with dnf.
 
+%{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
+%{!?_sysusersdir:%global _sysusersdir /usr/lib/sysusers.d}
+
 Name:           claude-desktop-builder
 Version:        1.0.0
 Release:        1%{?dist}
@@ -15,7 +18,6 @@ Source0:        %{name}-%{version}.tar.gz
 Source1:        %{name}.sysusers
 
 BuildArch:      noarch
-BuildRequires:  systemd-rpm-macros
 
 # Everything build-rpm.sh needs, plus dnf to install what it produces.
 Requires:       rpm-build
@@ -28,7 +30,7 @@ Requires:       gnupg2
 Requires:       desktop-file-utils
 Requires:       util-linux
 Requires:       dnf
-%{?sysusers_requires_compat}
+Requires(pre):  shadow-utils
 
 %description
 Claude Desktop is proprietary software owned by Anthropic and cannot be
@@ -64,16 +66,24 @@ bash -n build-rpm.sh
 bash -n builder/claude-desktop-update
 
 %pre
-%sysusers_create_compat %{SOURCE1}
+getent group claude-desktop-builder >/dev/null || groupadd -r claude-desktop-builder
+getent passwd claude-desktop-builder >/dev/null || \
+    useradd -r -g claude-desktop-builder -d %{_localstatedir}/lib/%{name} \
+            -s /sbin/nologin -c "Claude Desktop RPM builder" claude-desktop-builder
+exit 0
 
 %post
-%systemd_post claude-desktop-update.timer
+if [ $1 -eq 1 ]; then
+    systemctl --no-reload preset claude-desktop-update.timer >/dev/null 2>&1 || :
+fi
 
 %preun
-%systemd_preun claude-desktop-update.timer
+if [ $1 -eq 0 ]; then
+    systemctl --no-reload disable --now claude-desktop-update.timer >/dev/null 2>&1 || :
+fi
 
 %postun
-%systemd_postun claude-desktop-update.timer
+systemctl daemon-reload >/dev/null 2>&1 || :
 
 %files
 %license LICENSE
