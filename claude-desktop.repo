@@ -1,0 +1,6 @@
+[claude-desktop-builder]
+name=Claude Desktop builder
+baseurl=https://raw.githubusercontent.com/PremiumCPST/claude-desktop-rpm/repo/
+enabled=1
+gpgcheck=0
+metadata_expire=6h
