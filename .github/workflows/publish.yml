@@ -1,0 +1,78 @@
+# Builds the claude-desktop-builder RPM (scripts only, no Anthropic code) and
+# publishes it as a dnf repository on GitHub Pages.
+name: Publish dnf repository
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install build tools
+        run: dnf -y install rpm-build systemd-rpm-macros createrepo_c git tar gzip findutils
+
+      - uses: actions/checkout@v4
+
+      - name: Check scripts
+        run: |
+          bash -n build-rpm.sh
+          bash -n builder/claude-desktop-update
+
+      - name: Build packages
+        run: |
+          mkdir -p srpm site
+          bash builder/make-srpm.sh "$PWD/srpm"
+          rpmbuild --define "_topdir $PWD/rpmbuild" --define "dist %{nil}" \
+                   --rebuild srpm/*.src.rpm
+          find rpmbuild/RPMS -name '*.rpm' -exec cp {} site/ \;
+          cp srpm/*.src.rpm site/
+
+      - name: Create repository metadata
+        run: |
+          createrepo_c site
+          BASE="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}"
+          cat > site/claude-desktop.repo <<REPO
+          [claude-desktop-builder]
+          name=Claude Desktop builder
+          baseurl=$BASE/
+          enabled=1
+          gpgcheck=0
+          metadata_expire=6h
+          REPO
+          sed -i 's/^ *//' site/claude-desktop.repo
+          {
+            echo "<!doctype html><meta charset=utf-8><title>claude-desktop-builder</title>"
+            echo "<h1>claude-desktop-builder</h1>"
+            echo "<p>dnf repository. See <a href=\"https://github.com/$GITHUB_REPOSITORY\">the project</a>.</p>"
+            echo "<pre>sudo dnf config-manager addrepo --from-repofile=$BASE/claude-desktop.repo"
+            echo "sudo dnf install claude-desktop-builder"
+            echo "sudo claude-desktop-update</pre>"
+          } > site/index.html
+        shell: bash
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

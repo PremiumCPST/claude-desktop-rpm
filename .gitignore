@@ -1,0 +1,6 @@
+build/
+srpm/
+rpmbuild/
+site/
+*.rpm
+*.deb

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# claude-desktop-update — keep Claude Desktop current on Fedora/RHEL.
+#
+# Asks Anthropic's signed apt repository for the newest Claude Desktop
+# release. If it is newer than the installed one, rebuilds the official .deb
+# as an RPM on this machine (as the unprivileged claude-desktop-builder user)
+# and installs it with dnf. Nothing proprietary is ever redistributed.
+#
+# Usage: claude-desktop-update [--check] [--force]
+#   --check   only report whether an update is available (exit 10 if so)
+#   --force   rebuild and reinstall even if already up to date
+#
+set -euo pipefail
+
+LIBEXEC=/usr/libexec/claude-desktop-builder
+BUILDER_USER=claude-desktop-builder
+STATE=/var/lib/claude-desktop-builder
+CHECK=0; FORCE=0
+
+for a in "$@"; do
+    case "$a" in
+        --check) CHECK=1 ;;
+        --force) FORCE=1 ;;
+        -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+        *) echo "option inconnue : $a" >&2; exit 2 ;;
+    esac
+done
+
+[ "$(id -u)" -eq 0 ] || { echo "à lancer en root : sudo claude-desktop-update" >&2; exit 1; }
+
+as_builder() { runuser -u "$BUILDER_USER" -- env HOME="$STATE" TMPDIR="$STATE/tmp" "$@"; }
+mkdir -p "$STATE/tmp" "$STATE/build"
+chown "$BUILDER_USER:$BUILDER_USER" "$STATE/tmp" "$STATE/build"
+
+LATEST="$(as_builder bash "$LIBEXEC/build-rpm.sh" --print-latest)"
+[ -n "$LATEST" ] || { echo "impossible de connaître la dernière version" >&2; exit 1; }
+# Same mapping as build-rpm.sh: drop epoch and Debian revision.
+WANT="${LATEST#*:}"; case "$WANT" in *-*) WANT="${WANT%-*}" ;; esac; WANT="${WANT//-/.}"
+HAVE=""
+rpm -q claude-desktop >/dev/null 2>&1 && HAVE="$(rpm -q --qf '%{VERSION}' claude-desktop)"
+
+echo "installée : ${HAVE:-aucune} · disponible : $WANT"
+if [ "$FORCE" = 0 ] && [ -n "$HAVE" ] \
+   && [ "$(printf '%s\n%s\n' "$HAVE" "$WANT" | sort -V | tail -1)" = "$HAVE" ]; then
+    echo "Claude Desktop est à jour."
+    exit 0
+fi
+[ "$CHECK" = 1 ] && { echo "mise à jour disponible"; exit 10; }
+
+rm -rf "${STATE:?}/build/"*
+# Extra build-rpm.sh options (e.g. --nocheck) can be passed via the
+# environment or a systemd drop-in.
+# shellcheck disable=SC2086
+as_builder bash "$LIBEXEC/build-rpm.sh" --outdir "$STATE/build" ${CLAUDE_DESKTOP_BUILD_ARGS:-}
+RPM="$(find "$STATE/build" -maxdepth 1 -name 'claude-desktop-*.rpm' -print -quit)"
+[ -n "$RPM" ] || { echo "aucun RPM produit" >&2; exit 1; }
+dnf -y install "$RPM"
+echo "Claude Desktop $WANT installé. Relancez l'application si elle était ouverte."
