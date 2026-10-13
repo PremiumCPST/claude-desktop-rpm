@@ -55,5 +55,10 @@ rm -rf "${STATE:?}/build/"*
 as_builder bash "$LIBEXEC/build-rpm.sh" --outdir "$STATE/build" ${CLAUDE_DESKTOP_BUILD_ARGS:-}
 RPM="$(find "$STATE/build" -maxdepth 1 -name 'claude-desktop-*.rpm' -print -quit)"
 [ -n "$RPM" ] || { echo "aucun RPM produit" >&2; exit 1; }
-dnf -y install "$RPM"
+# Same version already installed (--force): dnf install would be a no-op.
+if [ -n "$HAVE" ] && [ "$HAVE" = "$WANT" ]; then
+    dnf -y reinstall "$RPM"
+else
+    dnf -y install "$RPM"
+fi
 echo "Claude Desktop $WANT installé. Relancez l'application si elle était ouverte."

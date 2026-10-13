@@ -10,7 +10,7 @@
 
 Name:           claude-desktop-builder
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Builds and updates Claude Desktop from Anthropic's official Linux package
 License:        MIT
 URL:            https://claude.ai/download
@@ -98,5 +98,8 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %attr(0755,claude-desktop-builder,claude-desktop-builder) %dir %{_localstatedir}/lib/%{name}
 
 %changelog
+* Tue Oct 13 2026 Ismaël - 1.0.0-2
+- claude-desktop-update --force now reinstalls when the version is unchanged
+
 * Mon Oct 12 2026 Ismaël - 1.0.0-1
 - First release
